@@ -1,0 +1,273 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' data: blob: https:;
+                 connect-src 'self' https://tyradex.app https://tyradex.vercel.app;
+                 img-src 'self' data: https:;
+                 style-src 'self' 'unsafe-inline';
+                 script-src 'self' 'unsafe-eval' 'unsafe-inline';">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PokeQuiz</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Roboto, Arial, sans-serif; margin:0; }
+    .topbar { position: sticky; top:0; display:flex; gap:.5rem; padding:.5rem; border-bottom:1px solid #eee; background:#fff; }
+    .topbar button { padding:.6rem 1rem; border-radius:12px; border:1px solid #ddd; background:#fff; }
+    .route { display:none; padding:1rem; }
+    .route.active { display:block; }
+    .poke-img-wrapper { display:flex; justify-content:center; align-items:center; height:220px; margin:1rem 0; }
+    #pokeImg { max-height:100%; max-width:100%; filter: grayscale(1) contrast(1.1); }
+    input, button { font-size:1rem; padding:.7rem; border-radius:12px; border:1px solid #ddd; }
+    form { display:flex; gap:.5rem; }
+    #feedback { min-height:1.25rem; font-weight:600; }
+    #quizCard, #finalCard { display:flex; flex-direction:column; gap:1rem; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <nav class="topbar">
+    <button data-link="#/">Accueil</button>
+    <button data-link="#/quiz">Quiz</button>
+    <button data-link="#/leaderboard">Classement</button>
+  </nav>
+
+  <main id="app">
+    <!-- Accueil -->
+    <section data-route="/" class="route active">
+      <h1>PokeQuiz</h1>
+      <p>Devine le Pokémon (10 questions). Sauvegarde ton score et ton temps !</p>
+      <button id="startBtn">Commencer</button>
+    </section>
+
+    <!-- Quiz -->
+    <section data-route="/quiz" class="route">
+      <div id="quizCard">
+        <div class="poke-img-wrapper">
+          <img id="pokeImg" src="" alt="Pokémon mystère" />
+        </div>
+        <form id="answerForm">
+          <input id="answerInput" type="text" placeholder="Nom du Pokémon" autocomplete="off" />
+          <button type="submit">Valider</button>
+        </form>
+        <p id="feedback"></p>
+        <p id="progress">Question <span id="qIndex">0</span>/10 — Score : <span id="score">0</span></p>
+      </div>
+
+      <div id="finalCard" class="hidden">
+        <h2>Résultat : <span id="finalScore"></span>/10</h2>
+        <p>Temps : <span id="finalTime"></span></p>
+        <form id="saveForm">
+          <input id="playerName" type="text" placeholder="Ton nom" required />
+          <button type="submit">Sauvegarder</button>
+        </form>
+        <button id="retryBtn">Rejouer</button>
+      </div>
+    </section>
+
+    <!-- Classement -->
+    <section data-route="/leaderboard" class="route">
+      <h2>Top 5</h2>
+      <ol id="leaderList"></ol>
+      <button id="refreshBoard">Rafraîchir</button>
+    </section>
+  </main>
+
+  <script>
+    // ---------- Router ----------
+    function render(current = window.location.hash || '#/') {
+      const route = current.replace('#','');
+      document.querySelectorAll('.route').forEach(s => s.classList.remove('active'));
+      (document.querySelector('[data-route="'+route+'"]') || document.querySelector('[data-route="/"]')).classList.add('active');
+      if (route === '/leaderboard') renderLeaderboard();
+    }
+    function navigate(hash) { window.location.hash = hash; render(hash); }
+
+    // ---------- Utils ----------
+    const API_BASE = 'https://tyradex.app/api/v1/pokemon';
+    const QUESTIONS = 10, MAX_ID = 1025;
+
+    const randInt = (min, max) => Math.floor(Math.random()*(max-min+1))+min;
+    function normalizeName(s=''){
+      return s.toString().trim().toLowerCase()
+        .normalize('NFD').replace(/\p{Diacritic}/gu,'')
+        .replace(/[^a-z0-9\- ]/g,' ').replace(/\s+/g,' ');
+    }
+    const fmtTime = s => `${Math.floor(s/60)}m${String(s%60).padStart(2,'0')}s`;
+
+    // ---------- Storage (File plugin si dispo, sinon localStorage) ----------
+    const FILE_NAME = 'scores.json';
+    let fsDir = null;
+    function hasCordovaFS(){ return !!(window.cordova && window.resolveLocalFileSystemURL && window.cordova.file && cordova.file.dataDirectory); }
+
+    async function ensureDir(){
+      if (!hasCordovaFS()) throw new Error('no-file');
+      return new Promise((res, rej)=>{
+        if (fsDir) return res(fsDir);
+        window.resolveLocalFileSystemURL(cordova.file.dataDirectory, e=>{ fsDir=e; res(e); }, rej);
+      });
+    }
+    async function readScores(){
+      if (hasCordovaFS()){
+        try{
+          const dir = await ensureDir();
+          return await new Promise((resolve,reject)=>{
+            dir.getFile(FILE_NAME, {create:true}, fe=>{
+              fe.file(file=>{
+                const r=new FileReader();
+                r.onloadend=()=>{ try{ resolve(r.result?JSON.parse(r.result):[]); } catch{ resolve([]);} };
+                r.readAsText(file);
+              }, reject);
+            }, reject);
+          });
+        } catch { /* fallback */ }
+      }
+      return JSON.parse(localStorage.getItem('scores')||'[]');
+    }
+    async function writeScores(arr){
+      if (hasCordovaFS()){
+        try{
+          const dir = await ensureDir();
+          return await new Promise((resolve,reject)=>{
+            dir.getFile(FILE_NAME, {create:true}, fe=>{
+              fe.createWriter(w=>{
+                w.onwriteend=resolve; w.onerror=reject;
+                const blob = new Blob([JSON.stringify(arr,null,2)], {type:'application/json'});
+                w.truncate(0); setTimeout(()=>w.write(blob), 10);
+              }, reject);
+            }, reject);
+          });
+        } catch { /* fallback */ }
+      }
+      localStorage.setItem('scores', JSON.stringify(arr));
+    }
+    async function pushScore(rec){
+      const arr = await readScores();
+      arr.push(rec);
+      arr.sort((a,b)=> b.score - a.score || a.timeSec - b.timeSec || (a.date||'').localeCompare(b.date||''));
+      await writeScores(arr);
+      return arr;
+    }
+    async function topN(n=5){
+      const arr = await readScores();
+      arr.sort((a,b)=> b.score - a.score || a.timeSec - b.timeSec);
+      return arr.slice(0,n);
+    }
+
+    // ---------- Quiz state ----------
+    const state = { index:0, score:0, startTs:0, current:null };
+
+    async function fetchPokemon(id){
+      const res = await fetch(`${API_BASE}/${id}`);
+      if (!res.ok) throw new Error('API '+res.status);
+      const data = await res.json();
+      const name = (data?.name?.fr) || (data?.name?.en) || data?.name || '';
+      const imageUrl = data?.sprites?.regular || data?.sprites?.default || data?.image || '';
+      return { id, name, imageUrl };
+    }
+
+    async function nextQuestion(){
+      if (state.index >= QUESTIONS) return showFinal();
+      document.getElementById('feedback').textContent='';
+      document.getElementById('answerInput').value='';
+      document.getElementById('qIndex').textContent = String(state.index+1);
+
+      let poke=null;
+      for (let tries=0; tries<5 && !poke; tries++){
+        try{
+          const p = await fetchPokemon(randInt(1, MAX_ID));
+          if (p.imageUrl) poke=p;
+        }catch{}
+      }
+      if (!poke){ document.getElementById('feedback').textContent="Erreur de chargement. Réessaie."; return; }
+
+      state.current = poke;
+      const img = document.getElementById('pokeImg');
+      img.style.filter = 'grayscale(1) contrast(1.1)';
+      img.src = poke.imageUrl;
+    }
+
+    function onSubmitAnswer(e){
+      e.preventDefault();
+      if (!state.current) return;
+      const guess = normalizeName(document.getElementById('answerInput').value);
+      const correct = normalizeName(state.current.name);
+      const ok = guess && correct && (guess === correct);
+      const fb = document.getElementById('feedback');
+
+      if (ok){
+        state.score++;
+        fb.textContent = `✅ Bravo ! C'était ${state.current.name}.`;
+        document.getElementById('pokeImg').style.filter = 'grayscale(0) contrast(1)';
+      } else {
+        fb.textContent = `❌ Raté. C'était ${state.current.name}.`;
+      }
+      document.getElementById('score').textContent = String(state.score);
+      state.index++;
+      setTimeout(nextQuestion, 800);
+    }
+
+    function showFinal(){
+      const elapsedSec = Math.round((Date.now() - state.startTs)/1000);
+      document.getElementById('finalScore').textContent = String(state.score);
+      document.getElementById('finalTime').textContent = fmtTime(elapsedSec);
+      document.getElementById('quizCard').classList.add('hidden');
+      document.getElementById('finalCard').classList.remove('hidden');
+
+      document.getElementById('saveForm').onsubmit = async (e)=>{
+        e.preventDefault();
+        const player = (document.getElementById('playerName').value || 'Anon').trim();
+        await pushScore({ player, score: state.score, timeSec: elapsedSec, date: new Date().toISOString() });
+        navigate('#/leaderboard');
+      };
+    }
+
+    function resetQuiz(){
+      state.index=0; state.score=0; state.startTs=Date.now(); state.current=null;
+      document.getElementById('score').textContent='0';
+      document.getElementById('qIndex').textContent='0';
+      document.getElementById('feedback').textContent='';
+      document.getElementById('finalCard').classList.add('hidden');
+      document.getElementById('quizCard').classList.remove('hidden');
+      nextQuestion();
+    }
+
+    async function renderLeaderboard(){
+      const list = document.getElementById('leaderList'); list.innerHTML='';
+      const top = await topN(5);
+      if (top.length===0){ list.innerHTML = '<li>Aucun score pour le moment.</li>'; return; }
+      top.forEach((r,i)=>{
+        const li=document.createElement('li');
+        li.textContent = `${i+1}. ${r.player} — ${r.score}/10 — ${r.timeSec}s`;
+        list.appendChild(li);
+      });
+    }
+
+    // ---------- Bootstrap ----------
+    function onReady(){
+      // router
+      window.addEventListener('hashchange', ()=>render());
+      render();
+
+      // nav
+      document.querySelectorAll('nav [data-link]').forEach(b=>{
+        b.addEventListener('click', ()=>navigate(b.getAttribute('data-link')));
+      });
+
+      // accueil
+      document.getElementById('startBtn').addEventListener('click', ()=>{ navigate('#/quiz'); resetQuiz(); });
+
+      // quiz
+      document.getElementById('answerForm').addEventListener('submit', onSubmitAnswer);
+      document.getElementById('retryBtn').addEventListener('click', ()=>{ navigate('#/quiz'); resetQuiz(); });
+
+      // classement
+      document.getElementById('refreshBoard').addEventListener('click', renderLeaderboard);
+    }
+
+    // Cordova + fallback navigateur
+    document.addEventListener('deviceready', onReady, false);
+    if (document.readyState === 'complete') onReady(); else window.addEventListener('load', onReady);
+  </script>
+</body>
+</html>

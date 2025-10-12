@@ -16,16 +16,16 @@
     "cordova-android": "^14.0.1",
     "cordova-browser": "^7.0.0",
     "cordova-plugin-file": "^8.1.3",
-    "cordova-plugin-whitelist": "^1.3.4"
+    "cordova-plugin-vibration-adv": "file:custom-plugins/cordova-plugin-vibration-adv"
   },
   "cordova": {
     "platforms": [
-      "android",
-      "browser"
+      "browser",
+      "android"
     ],
     "plugins": {
       "cordova-plugin-file": {},
-      "cordova-plugin-whitelist": {}
+      "cordova-plugin-vibration-adv": {}
     }
   }
 }

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin id="cordova-plugin-vibration-adv" version="1.0.0"
+        xmlns="http://apache.org/cordova/ns/plugins/1.0"
+        xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <name>AdvancedVibration</name>
+  <description>Advanced vibration with pattern arrays</description>
+
+  <!-- JS exposé -->
+  <js-module name="AdvVibration" src="www/adv-vibration.js">
+    <clobbers target="AdvVibration"/>
+  </js-module>
+
+  <!-- Android -->
+  <platform name="android">
+    <!-- Expose la classe au runtime Cordova -->
+    <config-file target="res/xml/config.xml" parent="/*">
+      <feature name="AdvVibration">
+        <param name="android-package" value="com.example.advvibration.AdvVibration" />
+      </feature>
+    </config-file>
+
+    <!-- Permission vibration -->
+    <edit-config file="app/src/main/AndroidManifest.xml" mode="merge" target="/manifest">
+      <uses-permission android:name="android.permission.VIBRATE" />
+    </edit-config>
+
+    <!-- Copier la classe Java dans le bon package -->
+    <source-file src="src/android/AdvVibration.java" target-dir="app/src/main/java/com/example/advvibration"/>
+  </platform>
+
+  <!-- iOS -->
+  <platform name="ios">
+    <config-file target="config.xml" parent="/*">
+      <feature name="AdvVibration">
+        <param name="ios-package" value="AdvVibration" />
+      </feature>
+    </config-file>
+    <preference name="UseSwiftLanguageVersion" value="5" />
+    <source-file src="src/ios/AdvVibration.swift"/>
+  </platform>
+
+  <!-- Browser -->
+  <platform name="browser">
+    <!-- Charge le proxy au démarrage du runtime Cordova browser -->
+    <js-module name="AdvVibrationBrowserProxy" src="src/browser/AdvVibrationProxy.js">
+      <runs />
+    </js-module>
+  </platform>
+</plugin>

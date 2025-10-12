@@ -1,0 +1,13 @@
+{
+  "name": "cordova-plugin-vibration-adv",
+  "version": "1.0.0",
+  "description": "Advanced vibration pattern plugin for Cordova",
+  "main": "www/adv-vibration.js",
+  "cordova": {
+    "id": "cordova-plugin-vibration-adv",
+    "platforms": ["android", "ios"]
+  },
+  "keywords": ["cordova", "vibration", "plugin"],
+  "author": "Mehdi",
+  "license": "MIT"
+}

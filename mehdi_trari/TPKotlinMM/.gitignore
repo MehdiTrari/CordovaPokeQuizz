@@ -1,0 +1,30 @@
+cat > mehdi_trari/.gitignore <<'EOF'
+# IntelliJ / Android Studio
+*.iml
+.idea
+.kotlin
+.DS_Store
+
+# Gradle / builds
+.gradle
+**/build/
+!src/**/build/
+local.properties
+
+# Android NDK / CMake
+.externalNativeBuild
+.cxx
+captures
+
+# iOS / Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+**/xcshareddata/WorkspaceSettings.xcsettings
+xcuserdata
+
+# Web (si module web)
+node_modules/
+EOF

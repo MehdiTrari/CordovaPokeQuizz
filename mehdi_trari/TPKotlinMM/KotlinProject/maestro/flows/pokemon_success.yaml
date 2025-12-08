@@ -1,0 +1,37 @@
+appId: org.example.project
+name: pokemon_success
+tags:
+  - maestro
+---
+- startProxy:
+    id: pokemon-api
+    port: 8899
+    mocks:
+      - request:
+          method: GET
+          url: https://tyradex.vercel.app/api/v1/pokemon/.*
+        response:
+          status: 200
+          headers:
+            Content-Type: application/json
+          body: |
+            {
+              "pokedex_id": "25",
+              "category": "Souris",
+              "name": {
+                "fr": "Pikachu",
+                "en": "Pikachu",
+                "jp": "Pikachu"
+              },
+              "sprites": {
+                "regular": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/25.png"
+              }
+            }
+- launchApp
+- assertVisible: "Pokemon affiche : Pikachu"
+- tapOn: "Nom du Pokemon"
+- inputText: "Pikachu"
+- tapOn: "Valider"
+- assertVisible: "Resultat : Bravo, c'est Pikachu !"
+- assertVisible: "Score: 1"
+- stopProxy: pokemon-api

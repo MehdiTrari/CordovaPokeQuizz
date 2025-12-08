@@ -33,3 +33,14 @@ in your IDE’s toolbar or open the [/iosApp](./iosApp) directory in Xcode and r
 ---
 
 Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
+
+## Maestro UI tests
+
+The project now ships two Maestro flows that validate the Pokemon quiz scenarios while mocking the remote API through Maestro's built-in proxy.
+
+1. Install Maestro (see [the official docs](https://maestro.mobile.dev/)) and ensure an Android emulator or device is available.
+2. Build and install the debug app: `./gradlew :composeApp:installDebug`.
+3. Run the happy-path flow: `maestro test maestro/flows/pokemon_success.yaml`.
+4. Run the wrong-answer flow: `maestro test maestro/flows/pokemon_failure.yaml`.
+
+Each flow starts a Maestro proxy that intercepts calls to `https://tyradex.vercel.app/api/v1/pokemon/*` and returns a fixed Pikachu payload so the UI is deterministic. The first flow types the correct answer and asserts that the label and score update, while the second enters a wrong answer and verifies that the score remains unchanged.
